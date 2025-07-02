@@ -25,3 +25,9 @@ motor
 flask[async]
 KeyBERT
 langchain-milvus
+langgraph
+tavily-python
+chromadb
+requests
+forex-python
+amadeus

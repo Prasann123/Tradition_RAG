@@ -1,41 +1,36 @@
 import React, { useRef, useState } from "react";
 import { clsx } from "clsx";
-
-// ...props typing...
+import type { AgentConfig } from "../services/api";
 
 const ChatSidebar: React.FC<{
   theme: "light" | "dark";
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleVideoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleTextUpload: () => void;
   handleScrape: () => void;
   textUpload: string;
   setTextUpload: (v: string) => void;
   scrapeUrl: string;
   setScrapeUrl: (v: string) => void;
+  agentConfig: AgentConfig;
+  setAgentConfig: (config: AgentConfig) => void;
 }> = ({
   theme,
   handleFileUpload,
-  handleVideoUpload,
   handleTextUpload,
   handleScrape,
   textUpload,
   setTextUpload,
   scrapeUrl,
   setScrapeUrl,
+  agentConfig,
+  setAgentConfig,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>("");
-  const [videoName, setVideoName] = useState<string>("");
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) setFileName(e.target.files[0].name);
     handleFileUpload(e);
-  };
-  const onVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) setVideoName(e.target.files[0].name);
-    handleVideoUpload(e);
   };
 
   return (
@@ -45,6 +40,83 @@ const ChatSidebar: React.FC<{
       )}
     >
       <div className="space-y-5">
+        {/* Agent Configuration Section */}
+        <div>
+          <p
+            className={clsx(
+              "block text-sm font-medium mb-2",
+              theme === "dark" ? "text-gray-300" : "text-gray-700"
+            )}
+          >
+            Agent Configuration
+          </p>
+          <div className="space-y-3">
+            {/* Vector DB Selector */}
+            <div>
+              <label
+                htmlFor="vectordb-select"
+                className={clsx(
+                  "block text-xs font-medium",
+                  theme === "dark" ? "text-gray-400" : "text-gray-600"
+                )}
+              >
+                Vector DB
+              </label>
+              <select
+                id="vectordb-select"
+                value={agentConfig.vectordb}
+                onChange={(e) =>
+                  setAgentConfig({
+                    ...agentConfig,
+                    vectordb: e.target.value as AgentConfig["vectordb"],
+                  })
+                }
+                className={clsx(
+                  "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md",
+                  theme === "dark"
+                    ? "bg-gray-900 border-gray-700 text-white"
+                    : "bg-white border-gray-300 text-gray-900"
+                )}
+              >
+                <option value="chroma">Chroma</option>
+                <option value="milvus">Milvus</option>
+              </select>
+            </div>
+            {/* Retriever Type Selector */}
+            <div>
+              <label
+                htmlFor="retriever-select"
+                className={clsx(
+                  "block text-xs font-medium",
+                  theme === "dark" ? "text-gray-400" : "text-gray-600"
+                )}
+              >
+                Retriever Type
+              </label>
+              <select
+                id="retriever-select"
+                value={agentConfig.retriever_type}
+                onChange={(e) =>
+                  setAgentConfig({
+                    ...agentConfig,
+                    retriever_type: e.target
+                      .value as AgentConfig["retriever_type"],
+                  })
+                }
+                className={clsx(
+                  "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md",
+                  theme === "dark"
+                    ? "bg-gray-900 border-gray-700 text-white"
+                    : "bg-white border-gray-300 text-gray-900"
+                )}
+              >
+                <option value="vectorstore">VectorStore</option>
+                <option value="multi_query">Multi-Query</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-4">
           {/* File Upload */}
           <div>
@@ -79,7 +151,7 @@ const ChatSidebar: React.FC<{
           </div>
           {/* Video Upload */}
           <div>
-   {/*          <label
+            {/*          <label
               className={clsx(
                 "block text-sm font-medium mb-2",
                 theme === "dark" ? "text-gray-300" : "text-gray-700"
@@ -95,7 +167,7 @@ const ChatSidebar: React.FC<{
               className="hidden"
               aria-label="Upload a video"
             /> */}
-  {/*           <button
+            {/*           <button
               type="button"
               onClick={() => videoInputRef.current?.click()}
               className={clsx(

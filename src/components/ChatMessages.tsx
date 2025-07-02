@@ -1,17 +1,26 @@
 import React from "react";
 import { clsx } from "clsx";
 
+// Define a more specific type for sources to avoid using 'any'
+type Source = {
+  source_name: string;
+  page_content: string;
+  metadata: Record<string, unknown>; // Use unknown for better type safety
+};
+
 type Message = {
   id: number;
   type: "text" | "file" | "video";
   content: string;
   fileName?: string;
   isUser?: boolean; // Add this property
+  sources?: Source[];
+  answer_source: string;
 };
 
 const ChatMessages: React.FC<{
   messages: Message[];
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
   theme: "light" | "dark";
 }> = ({ messages, messagesEndRef, theme }) => {
   console.log("ChatMessages rendering with messages:", messages); // Debug log
@@ -34,8 +43,11 @@ const ChatMessages: React.FC<{
       ) : (
         messages.map((msg) => {
           // Determine if message is from user based on type or explicit flag
-          const isUser = msg.isUser !== undefined ? msg.isUser : (msg.type === "file" || msg.type === "video");
-          
+          const isUser =
+            msg.isUser !== undefined
+              ? msg.isUser
+              : msg.type === "file" || msg.type === "video";
+
           return (
             <div
               key={msg.id}
@@ -64,6 +76,14 @@ const ChatMessages: React.FC<{
                 ) : (
                   <div>
                     <p>🎥 {msg.fileName}</p>
+                  </div>
+                )}
+                {/* Add this block to render the sources */}
+             
+                {/* Show answer source if available */}
+                {msg.answer_source && (
+                  <div className="mt-1 text-xs text-right text-gray-400 italic">
+                    Answer source: {msg.answer_source}
                   </div>
                 )}
               </div>

@@ -2,6 +2,12 @@ import axios from "axios";
 
 const API_URL = "http://localhost:5000"; // Your FastAPI server URL
 
+export interface AgentConfig {
+  vectordb?: "chroma" | "milvus";
+  retriever_type?: "vectorstore" | "multi_query";
+  parser_type?: "recursive" | "simple";
+}
+
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -9,16 +15,25 @@ const api = axios.create({
   },
 });
 
-export const sendMessage = async (message: string) => {
-  const response = await api.post("/api/send-message", { message, search_type: "mmr" });
+export const invokeAgent = async (query: string, config: AgentConfig) => {
+  // Calls the correct backend endpoint with the correct data structure.
+  const response = await api.post("api/invoke_agent", { query, config });
   return response.data;
 };
 
-
-export const uploadFile = async (file: File) => {
+export const uploadFile = async (file: File, config: AgentConfig) => {
   const formData = new FormData();
   formData.append("file", file);
 
+  // Add config values to formData
+  if (config.vectordb) {
+    formData.append("vectordb", config.vectordb);
+  }
+  if (config.parser_type) {
+    formData.append("parser_type", config.parser_type);
+  }
+
+  // Note: The backend route for this is likely under /api/ as well
   const response = await api.post("/api/upload-file", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
@@ -28,26 +43,13 @@ export const uploadFile = async (file: File) => {
   return response.data;
 };
 
-export const uploadVideo = async (video: File) => {
-  const formData = new FormData();
-  formData.append("file", video);
-
-  const response = await api.post("/upload-video", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-
+export const uploadText = async (text: string, config: AgentConfig) => {
+  const response = await api.post("/api/upload-text", { text, config });
   return response.data;
 };
 
-export const uploadText = async (text: string) => {
-  const response = await api.post("/upload-text", { text });
-  return response.data;
-};
-
-export const scrapeWebsite = async (url: string) => {
-  const response = await api.post("/scrape", { url });
+export const scrapeWebsite = async (url: string, config: AgentConfig) => {
+  const response = await api.post("/api/scrape", { url, config });
   return response.data;
 };
 

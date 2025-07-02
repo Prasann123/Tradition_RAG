@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { clsx } from "clsx";
 import {
-  sendMessage,
+  invokeAgent,
   uploadFile,
-  uploadVideo,
   uploadText,
   scrapeWebsite,
 } from "./services/api";
+import type { AgentConfig } from "./services/api";
 import toast, { Toaster } from "react-hot-toast";
 // Make sure the file exists at the specified path, or update the path if necessary
 import ChatMessages from "./components/ChatMessages";
@@ -15,13 +15,45 @@ import ChatSidebar from "./components/ChatSidebar";
 import ChatHeader from "./components/ChatHeader";
 import ThemeToggle from "./components/ThemeToggle";
 
+// Define a more specific type for sources to avoid using 'any'
+type Source = {
+  source_name: string;
+  page_content: string;
+  metadata: Record<string, any>;
+};
+
 type Message = {
   id: number;
   type: "text" | "file" | "video";
   content: string;
   fileName?: string;
-  isUser?: boolean; // Optional flag to indicate if the message is from the user
+  isUser?: boolean;
+  sources?: Source[];
+  answer_source: string;
 };
+
+// Utility functions to create messages
+const createUserMessage = (content: string): Message => ({
+  id: Date.now(),
+  type: "text",
+  content,
+  isUser: true,
+  sources: [],
+  answer_source: "",
+});
+
+const createBotMessage = (
+  content: string,
+  sources: Source[] = [],
+  answer_source: string = ""
+): Message => ({
+  id: Date.now(),
+  type: "text",
+  content,
+  isUser: false,
+  sources,
+  answer_source,
+});
 
 const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -29,9 +61,12 @@ const Chat: React.FC = () => {
   const [textUpload, setTextUpload] = useState("");
   const [scrapeUrl, setScrapeUrl] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [isUploading, setIsUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
+  const [agentConfig, setAgentConfig] = useState<AgentConfig>({
+    vectordb: "chroma",
+    retriever_type: "vectorstore",
+    parser_type: "recursive",
+  });
   // Scroll to bottom on new message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -53,60 +88,27 @@ const Chat: React.FC = () => {
   const handleSend = async () => {
     if (input.trim() === "") return;
 
-    // Add user message to UI immediately
-    const userMessage: Message = {
-      id: Date.now(),
-      type: "text",
-      content: input,
-      isUser: true,
-    };
-    setMessages((prevMessages) => [...prevMessages, userMessage]);
+    setMessages((prevMessages) => [...prevMessages, createUserMessage(input)]);
 
     // Save input before clearing it
     const userInput = input;
     setInput("");
 
     try {
-      // Use the saved input
-      const response = await sendMessage(userInput);
-
-      let answerContent;
-      if (response && response.answer) {
-        if (typeof response.answer === "string") {
-          answerContent = response.answer;
-        } else if (
-          typeof response.answer === "object" &&
-          response.answer.answer
-        ) {
-          answerContent = response.answer.answer;
-        } else {
-          answerContent = "No answer received";
-        }
-      } else {
-        answerContent =
-          response.message || response.content || "No answer received";
-      }
-      // Add console log to debug
-      console.log("Chat response:", response);
-      console.log("Source doc:", response.answer?.source_doc);
-      const botMessage: Message = {
-        id: Date.now() + 1,
-        type: "text",
-        content: answerContent,
-        isUser: false,
-      };
-      // Add bot response to UI
-      console.log("Bot message to add:", botMessage);
-      setMessages((prevMessages) => [...prevMessages, botMessage]);
+      const response = await invokeAgent(userInput, agentConfig);
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        createBotMessage(
+          response.final_answer || "Sorry, I couldn't find an answer.",
+          response.sources || [],
+          response.answer_source || ""
+        ),
+      ]);
     } catch (error) {
       console.error("Error sending message:", error);
       setMessages((prevMessages) => [
         ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: "Sorry, there was an error processing your request.",
-        },
+        createBotMessage("Sorry, there was an error processing your request."),
       ]);
     }
   };
@@ -115,123 +117,52 @@ const Chat: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Add file message to UI immediately
-    setIsUploading(true);
     const loadingToast = toast.loading("Uploading file...");
-    const fileMsg = {
+    const fileMsg: Message = {
       id: Date.now(),
       type: "file" as const,
       content: URL.createObjectURL(file),
       fileName: file.name,
+      isUser: true,
+      sources: [],
+      answer_source: "",
     };
-    setMessages([...messages, fileMsg]);
+    setMessages((prev) => [...prev, fileMsg]);
 
     try {
-      // Upload file to FastAPI backend
-      const response = await uploadFile(file);
-
-      // Add bot response to UI
+      const response = await uploadFile(file, agentConfig);
       setMessages((prevMessages) => [
         ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: response.answer,
-          isUser: false,
-        },
+        createBotMessage(response.answer, [], response.answer_source || ""),
       ]);
       toast.success("File uploaded successfully!", { id: loadingToast });
     } catch (error) {
       console.error("Error uploading file:", error);
       setMessages((prevMessages) => [
         ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: "Sorry, there was an error uploading your file.",
-        },
+        createBotMessage("Sorry, there was an error uploading your file."),
       ]);
       toast.error("Failed to upload file", { id: loadingToast });
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Add video message to UI immediately
-    const videoMsg = {
-      id: Date.now(),
-      type: "video" as const,
-      content: URL.createObjectURL(file),
-      fileName: file.name,
-    };
-    setMessages([...messages, videoMsg]);
-
-    try {
-      // Upload video to FastAPI backend
-      const response = await uploadVideo(file);
-
-      // Add bot response to UI
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: response.answer,
-          isUser: false,
-        },
-      ]);
-    } catch (error) {
-      console.error("Error uploading video:", error);
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: "Sorry, there was an error uploading your video.",
-        },
-      ]);
     }
   };
 
   const handleTextUpload = async () => {
     if (textUpload.trim() === "") return;
 
-    // Add text message to UI immediately
-    const textMsg: Message = {
-      id: Date.now(),
-      type: "text",
-      content: textUpload,
-    };
-    setMessages([...messages, textMsg]);
+    setMessages((prev) => [...prev, createUserMessage(textUpload)]);
     setTextUpload("");
 
     try {
-      // Upload text to FastAPI backend
-      const response = await uploadText(textUpload);
-
-      // Add bot response to UI
+      const response = await uploadText(textUpload, agentConfig);
       setMessages((prevMessages) => [
         ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: response.answer,
-          isUser: false,
-        },
+        createBotMessage(response.answer, [], response.answer_source || ""),
       ]);
     } catch (error) {
       console.error("Error uploading text:", error);
       setMessages((prevMessages) => [
         ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: "Sorry, there was an error processing your text.",
-        },
+        createBotMessage("Sorry, there was an error processing your text."),
       ]);
     }
   };
@@ -239,33 +170,23 @@ const Chat: React.FC = () => {
   const handleScrape = async () => {
     if (scrapeUrl.trim() === "") return;
 
-    // Add scrape message to UI immediately
-    const scrapeMsg: Message = {
-      id: Date.now(),
-      type: "text",
-      content: `Scraping site: ${scrapeUrl}...`,
-    };
-    setMessages([...messages, scrapeMsg]);
+    setMessages((prev) => [
+      ...prev,
+      createUserMessage(`Scraping site: ${scrapeUrl}...`),
+    ]);
     setScrapeUrl("");
 
     try {
-      // Call FastAPI backend to scrape website
-      const response = await scrapeWebsite(scrapeUrl);
-
-      // Add bot response to UI
+      const response = await scrapeWebsite(scrapeUrl, agentConfig);
       setMessages((prevMessages) => [
         ...prevMessages,
-        { id: Date.now(), type: "text", content: response.answer },
+        createBotMessage(response.answer, [], response.answer_source || ""),
       ]);
     } catch (error) {
       console.error("Error scraping website:", error);
       setMessages((prevMessages) => [
         ...prevMessages,
-        {
-          id: Date.now(),
-          type: "text",
-          content: "Sorry, there was an error scraping the website.",
-        },
+        createBotMessage("Sorry, there was an error scraping the website."),
       ]);
     }
   };
@@ -315,14 +236,14 @@ const Chat: React.FC = () => {
         <ChatSidebar
           theme={theme}
           handleFileUpload={handleFileUpload}
-          handleVideoUpload={handleVideoUpload}
           handleTextUpload={handleTextUpload}
           handleScrape={handleScrape}
           textUpload={textUpload}
           setTextUpload={setTextUpload}
           scrapeUrl={scrapeUrl}
           setScrapeUrl={setScrapeUrl}
-          isUploading={isUploading}
+          agentConfig={agentConfig}
+          setAgentConfig={setAgentConfig}
         />
       </div>
     </div>

@@ -67,11 +67,7 @@ def process_message(message,search_type_str="knnBeta"):
             "search_time_seconds": 0,
             "total_sources": 0
             }
-            # 3) Build context from retrieved chunks merge those chunks into a single string
-        # Example of docs_and_scores format:
-        # docs_and_scores = [(doc1, 0.9), (doc2, 0.8)]
-        # doc1.page_content = "This is the first chunk."
-        # doc2.page_content = "This is the second chunk." """
+
     
         context = "\n\n".join(doc.page_content for doc, _ in docs_and_scores)
         scores  = [float(score) for _, score in docs_and_scores]

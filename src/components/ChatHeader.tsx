@@ -20,7 +20,7 @@ const ChatHeader: React.FC<{ theme: "light" | "dark" }> = ({ theme }) => (
     >
       🤖
     </span>
-    <span className="font-bold text-xl text-white">RAG Assistant</span>
+    <span className="font-bold text-xl text-white">Reactive RAG Assistant</span>
     <span
       className={clsx(
         "ml-auto text-sm",

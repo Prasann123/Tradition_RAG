@@ -13,3 +13,10 @@ class IndexMechanism(Enum):
     HNSW = "HNSW"
     IVF = "IVF"
 
+class Vectordb (Enum):
+    MILVUS = "milvus"
+    CHROMA = "chroma"
+    MONGODB = "mongodb"
+    FAISS = "faiss"
+
+
